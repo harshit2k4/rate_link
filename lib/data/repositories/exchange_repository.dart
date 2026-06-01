@@ -9,18 +9,41 @@ class ExchangeRepository {
 
   ExchangeRepository(this._provider, this._cache);
 
+  // Fetches code -> full name for every currency frankfurter supports.
+  // Served from Hive for 24 hours before re-fetching.
+  Future<Map<String, String>> getCurrencyNames() async {
+    final cached = _cache.get('currency_names');
+    final cachedAt = _cache.get('currency_names_at');
+    if (cached != null && cachedAt != null) {
+      final age = DateTime.now().difference(DateTime.parse(cachedAt as String));
+      if (age.inHours < 24) {
+        return Map<String, String>.from(jsonDecode(cached as String) as Map);
+      }
+    }
+    try {
+      final data = await _provider.getCurrencies();
+      final names = Map<String, String>.from(data);
+      await _cache.put('currency_names', jsonEncode(names));
+      await _cache.put('currency_names_at', DateTime.now().toIso8601String());
+      return names;
+    } catch (_) {
+      if (cached != null) {
+        return Map<String, String>.from(jsonDecode(cached as String) as Map);
+      }
+      return {};
+    }
+  }
+
   Future<Map<String, double>> getLatestRates(String base) async {
     try {
       final data = await _provider.getLatest(base);
       final rates = _parseRates(data['rates']);
-      _cache.put('latest_$base', jsonEncode(rates));
-      _cache.put('latest_${base}_date', data['date'] as String);
+      await _cache.put('latest_$base', jsonEncode(rates));
+      await _cache.put('latest_${base}_date', data['date'] as String);
       return rates;
     } catch (_) {
       final cached = _cache.get('latest_$base');
-      if (cached != null) {
-        return _parseRates(jsonDecode(cached as String));
-      }
+      if (cached != null) return _parseRates(jsonDecode(cached as String));
       rethrow;
     }
   }
@@ -30,7 +53,6 @@ class ExchangeRepository {
     return _parseRates(data['rates']);
   }
 
-  // Returns date-sorted map of date -> rate for a given pair
   Future<Map<String, double>> getRateRange({
     required String fromDate,
     required String toDate,
@@ -51,14 +73,13 @@ class ExchangeRepository {
         result[entry.key] = (dayRates[target] as num).toDouble();
       }
     }
-    final sorted = Map.fromEntries(
+    return Map.fromEntries(
       result.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
     );
-    return sorted;
   }
 
-  String get latestDate =>
-      _cache.get('latest_USD_date', defaultValue: '') as String;
+  String latestDateFor(String base) =>
+      _cache.get('latest_${base}_date', defaultValue: '') as String;
 
   Map<String, double> _parseRates(dynamic raw) {
     return Map<String, double>.fromEntries(
