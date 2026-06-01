@@ -6,6 +6,8 @@ class AppColors {
   static const background = Color(0xFFF0EEF8);
   static const darkCard = Color(0xFF1E2140);
   static const purple = Color(0xFF7060D8);
+  // Used when color scheme toggle is off
+  static const altPrimary = Color(0xFF2563EB);
   static const purpleLight = Color(0xFFEAE8F7);
   static const green = Color(0xFF2CC49E);
   static const red = Color(0xFFFF6B6B);
@@ -13,18 +15,17 @@ class AppColors {
   static const textMuted = Color(0xFF9CA3AF);
   static const cardBg = Color(0xFFFFFFFF);
   static const chartLine = Color(0xFF9B8FE8);
-
   static const darkBg = Color(0xFF12142A);
-  static const darkSurface = Color(0xFF1A1D35);
+  static const darkSurface = Color(0xFF1C1F3A);
 }
 
 class AppTheme {
   AppTheme._();
 
-  static ThemeData get light => ThemeData(
+  static ThemeData light({Color primary = AppColors.purple}) => ThemeData(
     scaffoldBackgroundColor: AppColors.background,
-    colorScheme: const ColorScheme.light(
-      primary: AppColors.purple,
+    colorScheme: ColorScheme.light(
+      primary: primary,
       surface: AppColors.cardBg,
       onSurface: AppColors.textDark,
     ),
@@ -33,10 +34,10 @@ class AppTheme {
     ),
   );
 
-  static ThemeData get dark => ThemeData(
+  static ThemeData dark({Color primary = AppColors.purple}) => ThemeData(
     scaffoldBackgroundColor: AppColors.darkBg,
-    colorScheme: const ColorScheme.dark(
-      primary: AppColors.purple,
+    colorScheme: ColorScheme.dark(
+      primary: primary,
       surface: AppColors.darkSurface,
       onSurface: Colors.white,
     ),
