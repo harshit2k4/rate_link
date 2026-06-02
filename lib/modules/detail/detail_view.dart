@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/theme_ext.dart';
 import '../../core/utils/format_utils.dart';
 import 'detail_controller.dart';
 
@@ -14,16 +15,19 @@ class DetailView extends GetView<DetailController> {
       body: SafeArea(
         child: Obx(
           () => controller.isLoading.value
-              ? const Center(
-                  child: CircularProgressIndicator(color: AppColors.purple),
+              ? Center(
+                  child: CircularProgressIndicator(
+                    color: context.primaryAccent,
+                  ),
                 )
               : CustomScrollView(
                   slivers: [
                     SliverToBoxAdapter(child: _buildTopCard()),
-                    SliverToBoxAdapter(child: _buildHistoryHeader()),
+                    SliverToBoxAdapter(child: _buildHistoryHeader(context)),
                     SliverList(
                       delegate: SliverChildBuilderDelegate(
-                        (_, i) => _buildHistoryRow(controller.history[i]),
+                        (ctx, i) =>
+                            _buildHistoryRow(ctx, controller.history[i]),
                         childCount: controller.history.length,
                       ),
                     ),
@@ -51,11 +55,23 @@ class DetailView extends GetView<DetailController> {
             child: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
           ),
           const SizedBox(height: 24),
-          Text(
-            '1 ${controller.baseCurrency.value}',
-            style: const TextStyle(color: Colors.white54, fontSize: 14),
+          // Pair row consistent with home screen
+          Row(
+            children: [
+              Text(
+                '1 ${controller.baseCurrency.value}',
+                style: const TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+              const SizedBox(width: 6),
+              const Icon(Icons.arrow_forward, color: Colors.white30, size: 13),
+              const SizedBox(width: 6),
+              Text(
+                controller.targetCurrency.value,
+                style: const TextStyle(color: Colors.white38, fontSize: 14),
+              ),
+            ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
             formatRate(controller.rate.value),
             style: const TextStyle(
@@ -65,17 +81,20 @@ class DetailView extends GetView<DetailController> {
               letterSpacing: -1.5,
             ),
           ),
-          const SizedBox(height: 2),
-          Text(
-            formatChange(controller.rateChange.value),
-            style: TextStyle(
-              color: controller.rateChange.value >= 0
-                  ? AppColors.green
-                  : AppColors.red,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
+          if (!isZeroChange(controller.rateChange.value))
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                formatChange(controller.rateChange.value),
+                style: TextStyle(
+                  color: controller.rateChange.value > 0
+                      ? AppColors.green
+                      : AppColors.red,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ),
-          ),
           const SizedBox(height: 20),
           _buildPeriodTabs(),
           const SizedBox(height: 16),
@@ -121,7 +140,6 @@ class DetailView extends GetView<DetailController> {
     final range = maxVal - minVal;
     final pad = range == 0 ? 10.0 : range * 0.15;
     final interval = range == 0 ? 10.0 : range / 3;
-
     return LineChart(
       LineChartData(
         minY: minVal - pad,
@@ -186,13 +204,13 @@ class DetailView extends GetView<DetailController> {
     return value.toStringAsFixed(2);
   }
 
-  Widget _buildHistoryHeader() {
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(24, 28, 24, 4),
+  Widget _buildHistoryHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 28, 24, 4),
       child: Text(
         'History',
         style: TextStyle(
-          color: AppColors.textDark,
+          color: context.primaryText,
           fontSize: 18,
           fontWeight: FontWeight.bold,
         ),
@@ -200,15 +218,12 @@ class DetailView extends GetView<DetailController> {
     );
   }
 
-  Widget _buildHistoryRow(HistoryEntry entry) {
+  Widget _buildHistoryRow(BuildContext context, HistoryEntry entry) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
       decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(
-            color: AppColors.textMuted.withOpacity(0.12),
-            width: 1,
-          ),
+          bottom: BorderSide(color: context.dividerColor, width: 1),
         ),
       ),
       child: Row(
@@ -217,8 +232,8 @@ class DetailView extends GetView<DetailController> {
             width: 72,
             child: Text(
               formatShortDate(entry.isoDate),
-              style: const TextStyle(
-                color: AppColors.textDark,
+              style: TextStyle(
+                color: context.primaryText,
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
@@ -228,11 +243,11 @@ class DetailView extends GetView<DetailController> {
             child: Text(
               formatChange(entry.change),
               style: TextStyle(
-                color: entry.change > 0
+                color: isZeroChange(entry.change)
+                    ? context.secondaryText
+                    : entry.change > 0
                     ? AppColors.green
-                    : entry.change < 0
-                    ? AppColors.red
-                    : AppColors.textMuted,
+                    : AppColors.red,
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
@@ -240,8 +255,8 @@ class DetailView extends GetView<DetailController> {
           ),
           Text(
             formatRate(entry.rate),
-            style: const TextStyle(
-              color: AppColors.textDark,
+            style: TextStyle(
+              color: context.primaryText,
               fontSize: 14,
               fontWeight: FontWeight.w600,
             ),
