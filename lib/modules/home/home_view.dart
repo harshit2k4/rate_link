@@ -1,9 +1,9 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../../core/constants/currencies.dart';
 import '../../core/routes/app_pages.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/theme_ext.dart';
 import '../../core/utils/format_utils.dart';
 import 'home_controller.dart';
 
@@ -16,8 +16,8 @@ class HomeView extends GetView<HomeController> {
       body: SafeArea(
         child: Obx(() {
           if (controller.isLoading.value) {
-            return const Center(
-              child: CircularProgressIndicator(color: AppColors.purple),
+            return Center(
+              child: CircularProgressIndicator(color: context.primaryAccent),
             );
           }
           if (controller.hasError.value) {
@@ -25,15 +25,15 @@ class HomeView extends GetView<HomeController> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
+                  Text(
                     'Failed to load rates.',
-                    style: TextStyle(color: AppColors.textMuted),
+                    style: TextStyle(color: context.secondaryText),
                   ),
                   const SizedBox(height: 12),
                   ElevatedButton(
                     onPressed: controller.loadData,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.purple,
+                      backgroundColor: context.primaryAccent,
                     ),
                     child: const Text(
                       'Retry',
@@ -46,14 +46,15 @@ class HomeView extends GetView<HomeController> {
           }
           return CustomScrollView(
             slivers: [
-              SliverToBoxAdapter(child: _buildAppBar()),
-              SliverToBoxAdapter(child: _buildHeroCard()),
+              SliverToBoxAdapter(child: _buildAppBar(context)),
+              SliverToBoxAdapter(child: _buildHeroCard(context)),
               SliverToBoxAdapter(
-                child: _buildSectionHeader('Other Currencies'),
+                child: _buildSectionHeader(context, 'Other Currencies'),
               ),
               SliverList(
                 delegate: SliverChildBuilderDelegate(
-                  (_, i) => _buildCurrencyRow(controller.otherCurrencies[i]),
+                  (_, i) =>
+                      _buildCurrencyRow(context, controller.otherCurrencies[i]),
                   childCount: controller.otherCurrencies.length,
                 ),
               ),
@@ -65,19 +66,19 @@ class HomeView extends GetView<HomeController> {
     );
   }
 
-  Widget _buildAppBar() {
+  Widget _buildAppBar(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           RichText(
-            text: const TextSpan(
+            text: TextSpan(
               children: [
                 TextSpan(
                   text: 'Ex',
                   style: TextStyle(
-                    color: AppColors.purple,
+                    color: context.primaryAccent,
                     fontSize: 26,
                     fontWeight: FontWeight.bold,
                     letterSpacing: -0.5,
@@ -86,7 +87,7 @@ class HomeView extends GetView<HomeController> {
                 TextSpan(
                   text: 'change',
                   style: TextStyle(
-                    color: AppColors.textDark,
+                    color: context.primaryText,
                     fontSize: 26,
                     fontWeight: FontWeight.bold,
                     letterSpacing: -0.5,
@@ -97,9 +98,9 @@ class HomeView extends GetView<HomeController> {
           ),
           GestureDetector(
             onTap: () => Get.toNamed(Routes.settings),
-            child: const Icon(
+            child: Icon(
               Icons.menu_rounded,
-              color: AppColors.textDark,
+              color: context.surfaceIconColor,
               size: 26,
             ),
           ),
@@ -108,7 +109,8 @@ class HomeView extends GetView<HomeController> {
     );
   }
 
-  Widget _buildHeroCard() {
+  Widget _buildHeroCard(BuildContext context) {
+    final change = controller.targetChange.value;
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
       child: GestureDetector(
@@ -128,11 +130,31 @@ class HomeView extends GetView<HomeController> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '1 ${controller.baseCurrency.value}',
-                style: const TextStyle(color: Colors.white54, fontSize: 14),
+              // Pair row — makes it obvious to a new user what is being shown
+              Row(
+                children: [
+                  Text(
+                    '1 ${controller.baseCurrency.value}',
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Icon(
+                    Icons.arrow_forward,
+                    color: Colors.white30,
+                    size: 13,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    controller.targetCurrency.value,
+                    style: const TextStyle(color: Colors.white38, fontSize: 14),
+                  ),
+                ],
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 6),
               Text(
                 formatRate(controller.targetRate.value),
                 style: const TextStyle(
@@ -142,19 +164,26 @@ class HomeView extends GetView<HomeController> {
                   letterSpacing: -1.5,
                 ),
               ),
-              const SizedBox(height: 2),
+              // Full name of target currency so new users understand the unit
               Text(
-                formatChange(controller.targetChange.value),
-                style: const TextStyle(
-                  color: AppColors.green,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
+                controller.targetCurrencyName,
+                style: const TextStyle(color: Colors.white38, fontSize: 12),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 6),
+              // Only render change row when it is actually non-zero
+              if (!isZeroChange(change))
+                Text(
+                  formatChange(change),
+                  style: TextStyle(
+                    color: change > 0 ? AppColors.green : AppColors.red,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              const SizedBox(height: 16),
               if (controller.chartSpots.length > 1)
                 SizedBox(height: 80, child: _buildHomeChart()),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               Text(
                 formatDisplayDate(controller.currentDate.value),
                 style: const TextStyle(color: Colors.white38, fontSize: 12),
@@ -173,7 +202,6 @@ class HomeView extends GetView<HomeController> {
     final maxVal = values.reduce((a, b) => a > b ? a : b);
     final range = maxVal - minVal;
     final pad = range == 0 ? 10.0 : range * 0.15;
-
     return LineChart(
       LineChartData(
         minY: minVal - pad,
@@ -200,13 +228,13 @@ class HomeView extends GetView<HomeController> {
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(BuildContext context, String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 28, 24, 4),
       child: Text(
         title,
-        style: const TextStyle(
-          color: AppColors.textDark,
+        style: TextStyle(
+          color: context.primaryText,
           fontSize: 18,
           fontWeight: FontWeight.bold,
         ),
@@ -214,7 +242,8 @@ class HomeView extends GetView<HomeController> {
     );
   }
 
-  Widget _buildCurrencyRow(OtherCurrencyItem item) {
+  Widget _buildCurrencyRow(BuildContext context, OtherCurrencyItem item) {
+    final change = item.change;
     return GestureDetector(
       onTap: () => Get.toNamed(
         Routes.detail,
@@ -225,7 +254,7 @@ class HomeView extends GetView<HomeController> {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
         child: Row(
           children: [
-            _buildCurrencyIcon(item.code),
+            _buildCurrencyIcon(context, item.code),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -233,16 +262,16 @@ class HomeView extends GetView<HomeController> {
                 children: [
                   Text(
                     item.code,
-                    style: const TextStyle(
-                      color: AppColors.textDark,
+                    style: TextStyle(
+                      color: context.primaryText,
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   Text(
                     item.name,
-                    style: const TextStyle(
-                      color: AppColors.textMuted,
+                    style: TextStyle(
+                      color: context.secondaryText,
                       fontSize: 13,
                     ),
                   ),
@@ -254,20 +283,21 @@ class HomeView extends GetView<HomeController> {
               children: [
                 Text(
                   formatRate(item.rate),
-                  style: const TextStyle(
-                    color: AppColors.textDark,
+                  style: TextStyle(
+                    color: context.primaryText,
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                Text(
-                  formatChange(item.change),
-                  style: TextStyle(
-                    color: item.change >= 0 ? AppColors.green : AppColors.red,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
+                if (!isZeroChange(change))
+                  Text(
+                    formatChange(change),
+                    style: TextStyle(
+                      color: change > 0 ? AppColors.green : AppColors.red,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
               ],
             ),
           ],
@@ -276,23 +306,23 @@ class HomeView extends GetView<HomeController> {
     );
   }
 
-  Widget _buildCurrencyIcon(String code) {
-    final symbol = kCurrencySymbols[code] ?? code[0];
-    final display = symbol.length > 2 ? symbol[0] : symbol;
+  Widget _buildCurrencyIcon(BuildContext context, String code) {
+    final label = code.length >= 2 ? code.substring(0, 2) : code;
     return Container(
       width: 44,
       height: 44,
-      decoration: const BoxDecoration(
-        color: AppColors.purpleLight,
+      decoration: BoxDecoration(
+        color: context.purpleLightAdaptive,
         shape: BoxShape.circle,
       ),
       alignment: Alignment.center,
       child: Text(
-        display,
-        style: const TextStyle(
-          color: AppColors.purple,
-          fontSize: 16,
+        label,
+        style: TextStyle(
+          color: context.primaryAccent,
+          fontSize: 13,
           fontWeight: FontWeight.bold,
+          letterSpacing: -0.5,
         ),
       ),
     );
