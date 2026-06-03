@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'core/routes/app_pages.dart';
 import 'core/theme/app_theme.dart';
+import 'core/utils/format_utils.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -11,21 +12,30 @@ void main() async {
   await Hive.initFlutter();
   await Hive.openBox('prefs');
   await Hive.openBox('rateCache');
-  runApp(const RateLinkApp());
+
+  final prefs = Hive.box('prefs');
+  // Apply saved digit separator before any widget renders
+  FormatPrefs.apply(
+    prefs.get('digitSeparator', defaultValue: FormatPrefs.options[1]) as String,
+  );
+
+  runApp(const RateFlipApp());
 }
 
-class RateLinkApp extends StatelessWidget {
-  const RateLinkApp({super.key});
+class RateFlipApp extends StatelessWidget {
+  const RateFlipApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final isDark =
-        Hive.box('prefs').get('darkMode', defaultValue: false) as bool;
+    final prefs = Hive.box('prefs');
+    final isDark = prefs.get('darkMode', defaultValue: false) as bool;
+    final useScheme = prefs.get('colorScheme', defaultValue: true) as bool;
+    final primary = useScheme ? AppColors.purple : AppColors.altPrimary;
     return GetMaterialApp(
-      title: 'RateLink',
+      title: 'RateFlip',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
+      theme: AppTheme.light(primary: primary),
+      darkTheme: AppTheme.dark(primary: primary),
       themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
       initialRoute: AppPages.initial,
       getPages: AppPages.routes,
