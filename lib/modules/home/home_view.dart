@@ -1,7 +1,13 @@
+import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:get/get.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../core/routes/app_pages.dart';
+import '../../core/services/connectivity_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/theme_ext.dart';
 import '../../core/utils/format_utils.dart';
@@ -10,17 +16,22 @@ import 'home_controller.dart';
 class HomeView extends GetView<HomeController> {
   const HomeView({super.key});
 
+  // Static key so the RepaintBoundary survives rebuilds
+  static final _heroKey = GlobalKey();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
         child: Obx(() {
-          if (controller.isLoading.value) {
+          // Full-screen states only when there is no cached data yet
+          if (controller.isLoading.value &&
+              controller.otherCurrencies.isEmpty) {
             return Center(
               child: CircularProgressIndicator(color: context.primaryAccent),
             );
           }
-          if (controller.hasError.value) {
+          if (controller.hasError.value && controller.otherCurrencies.isEmpty) {
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -44,26 +55,71 @@ class HomeView extends GetView<HomeController> {
               ),
             );
           }
-          return CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(child: _buildAppBar(context)),
-              SliverToBoxAdapter(child: _buildHeroCard(context)),
-              SliverToBoxAdapter(
-                child: _buildSectionHeader(context, 'Other Currencies'),
-              ),
-              SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (_, i) =>
-                      _buildCurrencyRow(context, controller.otherCurrencies[i]),
-                  childCount: controller.otherCurrencies.length,
+          return Column(
+            children: [
+              _buildOfflineBanner(),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: controller.loadData,
+                  color: context.primaryAccent,
+                  // AlwaysScrollable so pull-to-refresh works even when
+                  // content is shorter than the screen
+                  child: CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    slivers: [
+                      SliverToBoxAdapter(child: _buildAppBar(context)),
+                      SliverToBoxAdapter(child: _buildHeroCard(context)),
+                      SliverToBoxAdapter(
+                        child: _buildSectionHeader(context, 'Other Currencies'),
+                      ),
+                      SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (_, i) => _buildCurrencyRow(
+                            context,
+                            controller.otherCurrencies[i],
+                          ),
+                          childCount: controller.otherCurrencies.length,
+                        ),
+                      ),
+                      const SliverToBoxAdapter(child: SizedBox(height: 32)),
+                    ],
+                  ),
                 ),
               ),
-              const SliverToBoxAdapter(child: SizedBox(height: 32)),
             ],
           );
         }),
       ),
     );
+  }
+
+  // Slides in from zero height when connectivity is lost
+  Widget _buildOfflineBanner() {
+    return Obx(() {
+      final offline = !Get.find<ConnectivityService>().isOnline.value;
+      return AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        height: offline ? 36 : 0,
+        color: const Color(0xFFF59E0B),
+        child: offline
+            ? const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.wifi_off_rounded, size: 14, color: Colors.white),
+                  SizedBox(width: 6),
+                  Text(
+                    'No internet connection',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              )
+            : null,
+      );
+    });
   }
 
   Widget _buildAppBar(BuildContext context) {
@@ -121,78 +177,129 @@ class HomeView extends GetView<HomeController> {
             'target': controller.targetCurrency.value,
           },
         ),
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppColors.darkCard,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Pair row — makes it obvious to a new user what is being shown
-              Row(
-                children: [
+        child: RepaintBoundary(
+          key: _heroKey,
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.darkCard,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Top row: pair info + share icon
+                Row(
+                  children: [
+                    Text(
+                      '1 ${controller.baseCurrency.value}',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Icon(
+                      Icons.arrow_forward,
+                      color: Colors.white30,
+                      size: 13,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      controller.targetCurrency.value,
+                      style: const TextStyle(
+                        color: Colors.white38,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: () => _showShareSheet(context),
+                      child: const Icon(
+                        Icons.ios_share_rounded,
+                        color: Colors.white38,
+                        size: 18,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  formatRate(controller.targetRate.value),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 38,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -1.5,
+                  ),
+                ),
+                Text(
+                  controller.targetCurrencyName,
+                  style: const TextStyle(color: Colors.white38, fontSize: 12),
+                ),
+                const SizedBox(height: 6),
+                if (!isZeroChange(change))
                   Text(
-                    '1 ${controller.baseCurrency.value}',
-                    style: const TextStyle(
-                      color: Colors.white70,
+                    formatChange(change),
+                    style: TextStyle(
+                      color: change > 0 ? AppColors.green : AppColors.red,
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  const Icon(
-                    Icons.arrow_forward,
-                    color: Colors.white30,
-                    size: 13,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    controller.targetCurrency.value,
-                    style: const TextStyle(color: Colors.white38, fontSize: 14),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                formatRate(controller.targetRate.value),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 38,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: -1.5,
-                ),
-              ),
-              // Full name of target currency so new users understand the unit
-              Text(
-                controller.targetCurrencyName,
-                style: const TextStyle(color: Colors.white38, fontSize: 12),
-              ),
-              const SizedBox(height: 6),
-              // Only render change row when it is actually non-zero
-              if (!isZeroChange(change))
-                Text(
-                  formatChange(change),
-                  style: TextStyle(
-                    color: change > 0 ? AppColors.green : AppColors.red,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              const SizedBox(height: 16),
-              if (controller.chartSpots.length > 1)
-                SizedBox(height: 80, child: _buildHomeChart()),
-              const SizedBox(height: 12),
-              Text(
-                formatDisplayDate(controller.currentDate.value),
-                style: const TextStyle(color: Colors.white38, fontSize: 12),
-              ),
-            ],
+                const SizedBox(height: 16),
+                if (controller.chartSpots.length > 1)
+                  SizedBox(height: 80, child: _buildHomeChart()),
+                const SizedBox(height: 12),
+                _buildStalenessRow(),
+              ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  // Date on the left, staleness indicator on the right.
+  // Amber warning icon appears when data is over 15 minutes old.
+  Widget _buildStalenessRow() {
+    return Obx(() {
+      controller.stalenessTick.value; // recompute every minute
+      final stale = controller.isStale;
+      final text = controller.stalenessText;
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            formatDisplayDate(controller.currentDate.value),
+            style: const TextStyle(color: Colors.white38, fontSize: 12),
+          ),
+          if (text.isNotEmpty)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (stale)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 4),
+                    child: Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.amber,
+                      size: 12,
+                    ),
+                  ),
+                Text(
+                  text,
+                  style: TextStyle(
+                    color: stale ? Colors.amber : Colors.white38,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+        ],
+      );
+    });
   }
 
   Widget _buildHomeChart() {
@@ -326,5 +433,112 @@ class HomeView extends GetView<HomeController> {
         ),
       ),
     );
+  }
+
+  // Share bottom sheet
+  void _showShareSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: context.cardBg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetCtx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: sheetCtx.secondaryText.withOpacity(0.4),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Share Rate',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: sheetCtx.primaryText,
+            ),
+          ),
+          const SizedBox(height: 4),
+          ListTile(
+            leading: Icon(
+              Icons.text_fields_rounded,
+              color: sheetCtx.primaryAccent,
+            ),
+            title: Text(
+              'Share as Text',
+              style: TextStyle(color: sheetCtx.primaryText),
+            ),
+            subtitle: Text(
+              'Plain-text format',
+              style: TextStyle(color: sheetCtx.secondaryText, fontSize: 12),
+            ),
+            onTap: () {
+              Navigator.pop(sheetCtx);
+              _shareAsText();
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.image_rounded, color: sheetCtx.primaryAccent),
+            title: Text(
+              'Share as Image',
+              style: TextStyle(color: sheetCtx.primaryText),
+            ),
+            subtitle: Text(
+              'Capture the rate card',
+              style: TextStyle(color: sheetCtx.secondaryText, fontSize: 12),
+            ),
+            onTap: () {
+              Navigator.pop(sheetCtx);
+              _shareAsImage();
+            },
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _shareAsText() async {
+    final base = controller.baseCurrency.value;
+    final target = controller.targetCurrency.value;
+    final rate = formatRate(controller.targetRate.value);
+    final name = controller.targetCurrencyName;
+    final change = controller.targetChange.value;
+    final changePart = isZeroChange(change)
+        ? ''
+        : '\nChange today: ${formatChange(change)}';
+    await Share.share(
+      '1 $base = $rate $target ($name)$changePart\n\nShared via RateFlip',
+    );
+  }
+
+  Future<void> _shareAsImage() async {
+    try {
+      final boundary =
+          _heroKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) return _shareAsText();
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return _shareAsText();
+      final bytes = byteData.buffer.asUint8List();
+      final dir = await getTemporaryDirectory();
+      final base = controller.baseCurrency.value;
+      final target = controller.targetCurrency.value;
+      final file = File('${dir.path}/rateflip_${base}_$target.png');
+      await file.writeAsBytes(bytes);
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text:
+            '1 $base = ${formatRate(controller.targetRate.value)} $target · RateFlip',
+      );
+    } catch (_) {
+      await _shareAsText();
+    }
   }
 }

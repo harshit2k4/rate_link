@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:get/get.dart';
 import 'package:hive/hive.dart';
@@ -20,6 +21,7 @@ class OtherCurrencyItem {
 class HomeController extends GetxController {
   late final ExchangeRepository _repo;
   late final Box _prefs;
+  Timer? _stalenessTimer;
 
   final isLoading = true.obs;
   final hasError = false.obs;
@@ -31,12 +33,30 @@ class HomeController extends GetxController {
   final chartSpots = <FlSpot>[].obs;
   final otherCurrencies = <OtherCurrencyItem>[].obs;
   final currencyNames = <String, String>{}.obs;
+  final lastUpdated = Rxn<DateTime>();
+  // Ticks every minute so stalenessText recomputes without a separate stream
+  final stalenessTick = 0.obs;
 
-  // Full name helpers used by hero card to explain the pair to new users
   String get targetCurrencyName =>
       currencyNames[targetCurrency.value] ?? targetCurrency.value;
   String get baseCurrencyName =>
       currencyNames[baseCurrency.value] ?? baseCurrency.value;
+
+  bool get isStale {
+    final dt = lastUpdated.value;
+    if (dt == null) return false;
+    return DateTime.now().difference(dt).inMinutes > 15;
+  }
+
+  String get stalenessText {
+    stalenessTick.value; // subscribe so Obx rebuilds each tick
+    final dt = lastUpdated.value;
+    if (dt == null) return '';
+    final diff = DateTime.now().difference(dt);
+    if (diff.inSeconds < 60) return 'Just updated';
+    if (diff.inMinutes < 60) return 'Updated ${diff.inMinutes}m ago';
+    return 'Updated ${diff.inHours}h ago';
+  }
 
   @override
   void onInit() {
@@ -47,7 +67,17 @@ class HomeController extends GetxController {
         _prefs.get('baseCurrency', defaultValue: 'USD') as String;
     targetCurrency.value =
         _prefs.get('targetCurrency', defaultValue: 'INR') as String;
+    _stalenessTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => stalenessTick.value++,
+    );
     loadData();
+  }
+
+  @override
+  void onClose() {
+    _stalenessTimer?.cancel();
+    super.onClose();
   }
 
   Future<void> loadData() async {
@@ -78,6 +108,7 @@ class HomeController extends GetxController {
       targetChange.value =
           (todayRates[target] ?? 0.0) - (yesterdayRates[target] ?? 0.0);
       currentDate.value = _repo.latestDateFor(base);
+      lastUpdated.value = DateTime.now();
 
       final codes = todayRates.keys.where((c) => c != target).toList()..sort();
       otherCurrencies.value = codes
