@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'core/routes/app_pages.dart';
+import 'core/services/connectivity_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/format_utils.dart';
 
@@ -12,13 +13,12 @@ void main() async {
   await Hive.initFlutter();
   await Hive.openBox('prefs');
   await Hive.openBox('rateCache');
-
   final prefs = Hive.box('prefs');
-  // Apply saved digit separator before any widget renders
   FormatPrefs.apply(
     prefs.get('digitSeparator', defaultValue: FormatPrefs.options[1]) as String,
   );
-
+  // Register before runApp so Get.find works on the very first frame
+  Get.put(ConnectivityService());
   runApp(const RateFlipApp());
 }
 
