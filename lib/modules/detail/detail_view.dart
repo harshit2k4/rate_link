@@ -1,6 +1,11 @@
+import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:get/get.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/theme_ext.dart';
 import '../../core/utils/format_utils.dart';
@@ -8,6 +13,8 @@ import 'detail_controller.dart';
 
 class DetailView extends GetView<DetailController> {
   const DetailView({super.key});
+
+  static final _cardKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +29,7 @@ class DetailView extends GetView<DetailController> {
                 )
               : CustomScrollView(
                   slivers: [
-                    SliverToBoxAdapter(child: _buildTopCard()),
+                    SliverToBoxAdapter(child: _buildTopCard(context)),
                     SliverToBoxAdapter(child: _buildHistoryHeader(context)),
                     SliverList(
                       delegate: SliverChildBuilderDelegate(
@@ -39,73 +46,97 @@ class DetailView extends GetView<DetailController> {
     );
   }
 
-  Widget _buildTopCard() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-      decoration: BoxDecoration(
-        color: AppColors.darkCard,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          GestureDetector(
-            onTap: () => Get.back(),
-            child: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
-          ),
-          const SizedBox(height: 24),
-          // Pair row consistent with home screen
-          Row(
-            children: [
-              Text(
-                '1 ${controller.baseCurrency.value}',
-                style: const TextStyle(color: Colors.white70, fontSize: 14),
-              ),
-              const SizedBox(width: 6),
-              const Icon(Icons.arrow_forward, color: Colors.white30, size: 13),
-              const SizedBox(width: 6),
-              Text(
-                controller.targetCurrency.value,
-                style: const TextStyle(color: Colors.white38, fontSize: 14),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            formatRate(controller.rate.value),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 38,
-              fontWeight: FontWeight.bold,
-              letterSpacing: -1.5,
+  Widget _buildTopCard(BuildContext context) {
+    return RepaintBoundary(
+      key: _cardKey,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+        decoration: BoxDecoration(
+          color: AppColors.darkCard,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Back + share row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                GestureDetector(
+                  onTap: () => Get.back(),
+                  child: const Icon(
+                    Icons.arrow_back,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => _showShareSheet(context),
+                  child: const Icon(
+                    Icons.ios_share_rounded,
+                    color: Colors.white38,
+                    size: 18,
+                  ),
+                ),
+              ],
             ),
-          ),
-          if (!isZeroChange(controller.rateChange.value))
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(
-                formatChange(controller.rateChange.value),
-                style: TextStyle(
-                  color: controller.rateChange.value > 0
-                      ? AppColors.green
-                      : AppColors.red,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Text(
+                  '1 ${controller.baseCurrency.value}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+                const SizedBox(width: 6),
+                const Icon(
+                  Icons.arrow_forward,
+                  color: Colors.white30,
+                  size: 13,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  controller.targetCurrency.value,
+                  style: const TextStyle(color: Colors.white38, fontSize: 14),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              formatRate(controller.rate.value),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 38,
+                fontWeight: FontWeight.bold,
+                letterSpacing: -1.5,
+              ),
+            ),
+            if (!isZeroChange(controller.rateChange.value))
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  formatChange(controller.rateChange.value),
+                  style: TextStyle(
+                    color: controller.rateChange.value > 0
+                        ? AppColors.green
+                        : AppColors.red,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
+            const SizedBox(height: 20),
+            _buildPeriodTabs(),
+            const SizedBox(height: 16),
+            if (controller.chartSpots.length > 1)
+              SizedBox(height: 160, child: _buildDetailChart()),
+            const SizedBox(height: 14),
+            Text(
+              formatDisplayDate(controller.currentDate.value),
+              style: const TextStyle(color: Colors.white38, fontSize: 12),
             ),
-          const SizedBox(height: 20),
-          _buildPeriodTabs(),
-          const SizedBox(height: 16),
-          if (controller.chartSpots.length > 1)
-            SizedBox(height: 160, child: _buildDetailChart()),
-          const SizedBox(height: 14),
-          Text(
-            formatDisplayDate(controller.currentDate.value),
-            style: const TextStyle(color: Colors.white38, fontSize: 12),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -264,5 +295,110 @@ class DetailView extends GetView<DetailController> {
         ],
       ),
     );
+  }
+
+  void _showShareSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: context.cardBg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetCtx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: sheetCtx.secondaryText.withOpacity(0.4),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Share Rate',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: sheetCtx.primaryText,
+            ),
+          ),
+          const SizedBox(height: 4),
+          ListTile(
+            leading: Icon(
+              Icons.text_fields_rounded,
+              color: sheetCtx.primaryAccent,
+            ),
+            title: Text(
+              'Share as Text',
+              style: TextStyle(color: sheetCtx.primaryText),
+            ),
+            subtitle: Text(
+              'Plain-text format',
+              style: TextStyle(color: sheetCtx.secondaryText, fontSize: 12),
+            ),
+            onTap: () {
+              Navigator.pop(sheetCtx);
+              _shareAsText();
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.image_rounded, color: sheetCtx.primaryAccent),
+            title: Text(
+              'Share as Image',
+              style: TextStyle(color: sheetCtx.primaryText),
+            ),
+            subtitle: Text(
+              'Capture the rate card',
+              style: TextStyle(color: sheetCtx.secondaryText, fontSize: 12),
+            ),
+            onTap: () {
+              Navigator.pop(sheetCtx);
+              _shareAsImage();
+            },
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _shareAsText() async {
+    final base = controller.baseCurrency.value;
+    final target = controller.targetCurrency.value;
+    final rate = formatRate(controller.rate.value);
+    final change = controller.rateChange.value;
+    final changePart = isZeroChange(change)
+        ? ''
+        : '\nChange today: ${formatChange(change)}';
+    await Share.share(
+      '1 $base = $rate $target$changePart\n\nShared via RateFlip',
+    );
+  }
+
+  Future<void> _shareAsImage() async {
+    try {
+      final boundary =
+          _cardKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) return _shareAsText();
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return _shareAsText();
+      final bytes = byteData.buffer.asUint8List();
+      final dir = await getTemporaryDirectory();
+      final base = controller.baseCurrency.value;
+      final target = controller.targetCurrency.value;
+      final file = File('${dir.path}/rateflip_detail_${base}_$target.png');
+      await file.writeAsBytes(bytes);
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text:
+            '1 $base = ${formatRate(controller.rate.value)} $target · RateFlip',
+      );
+    } catch (_) {
+      await _shareAsText();
+    }
   }
 }
