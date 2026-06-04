@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
 import 'package:hive/hive.dart';
-import '../../core/theme/app_theme.dart';
+import '../../core/theme/theme_controller.dart';
 import '../../core/utils/format_utils.dart';
 import '../../data/providers/frankfurter_provider.dart';
 import '../../data/repositories/exchange_repository.dart';
@@ -31,6 +31,7 @@ class SettingsController extends GetxController {
     targetCurrency.value =
         _prefs.get('targetCurrency', defaultValue: 'INR') as String;
     listFilter.value = _prefs.get('listFilter', defaultValue: 'All') as String;
+    // Mirror the saved state so the toggle UI shows the right position
     isDarkMode.value = _prefs.get('darkMode', defaultValue: false) as bool;
     colorScheme.value = _prefs.get('colorScheme', defaultValue: true) as bool;
     digitSeparator.value =
@@ -67,31 +68,20 @@ class SettingsController extends GetxController {
     digitSeparator.value = style;
     _prefs.put('digitSeparator', style);
     FormatPrefs.apply(style);
-    // Reload home so rate numbers re-render with the new format
     _syncHome();
-  }
-
-  void _applyTheme({bool? dark, bool? scheme}) {
-    final darkMode = dark ?? isDarkMode.value;
-    final useScheme = scheme ?? colorScheme.value;
-    final primary = useScheme ? AppColors.purple : AppColors.altPrimary;
-    Get.changeTheme(
-      darkMode
-          ? AppTheme.dark(primary: primary)
-          : AppTheme.light(primary: primary),
-    );
   }
 
   void toggleDarkMode(bool value) {
     isDarkMode.value = value;
     _prefs.put('darkMode', value);
-    _applyTheme(dark: value);
+    // ThemeController.update() triggers GetBuilder in main.dart → full rebuild
+    Get.find<ThemeController>().setDarkMode(value);
   }
 
   void toggleColorScheme(bool value) {
     colorScheme.value = value;
     _prefs.put('colorScheme', value);
-    _applyTheme(scheme: value);
+    Get.find<ThemeController>().setColorScheme(value);
   }
 
   void _syncHome() {

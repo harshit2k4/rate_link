@@ -190,7 +190,6 @@ class SettingsView extends GetView<SettingsController> {
     );
   }
 
-  // Full-list currency picker with live search
   void _showCurrencyPicker({
     required String title,
     required String current,
@@ -198,7 +197,6 @@ class SettingsView extends GetView<SettingsController> {
   }) {
     final codes = controller.currencyCodes;
     final names = controller.currencyNames;
-    // query lives outside the builder so it survives rebuilds
     var query = '';
 
     Get.bottomSheet(
@@ -328,7 +326,6 @@ class SettingsView extends GetView<SettingsController> {
     );
   }
 
-  // Simple picker for fixed-option lists (List filter, Digit separator)
   void _showSimplePicker({
     required String title,
     required String current,
@@ -424,7 +421,6 @@ class SettingsView extends GetView<SettingsController> {
             () => _buildToggleRow(
               context: context,
               label: 'Color Scheme',
-              // Shows which scheme is active as a live hint
               subtitle: controller.colorScheme.value ? 'Purple' : 'Blue',
               value: controller.colorScheme.value,
               onChanged: controller.toggleColorScheme,
@@ -485,14 +481,28 @@ class SettingsView extends GetView<SettingsController> {
   Widget _buildDivider(BuildContext context) =>
       Divider(height: 24, thickness: 1, color: context.dividerColor);
 
+  // FlutterLogo is a built-in Flutter widget — no package needed
   Widget _buildFooter(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 24),
-      child: Center(
-        child: Text(
-          'RateFlip © 2025',
-          style: TextStyle(color: context.secondaryText, fontSize: 13),
-        ),
+      padding: const EdgeInsets.only(bottom: 20, top: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            'Made with ',
+            style: TextStyle(color: context.secondaryText, fontSize: 12),
+          ),
+          const Text('❤️', style: TextStyle(fontSize: 11)),
+          Text(
+            ' in ',
+            style: TextStyle(color: context.secondaryText, fontSize: 12),
+          ),
+          const FlutterLogo(size: 13),
+          Text(
+            ' Flutter',
+            style: TextStyle(color: context.secondaryText, fontSize: 12),
+          ),
+        ],
       ),
     );
   }

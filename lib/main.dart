@@ -4,7 +4,7 @@ import 'package:get/get.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'core/routes/app_pages.dart';
 import 'core/services/connectivity_service.dart';
-import 'core/theme/app_theme.dart';
+import 'core/theme/theme_controller.dart';
 import 'core/utils/format_utils.dart';
 
 void main() async {
@@ -17,8 +17,9 @@ void main() async {
   FormatPrefs.apply(
     prefs.get('digitSeparator', defaultValue: FormatPrefs.options[1]) as String,
   );
-  // Register before runApp so Get.find works on the very first frame
+  // Both services must exist before the first frame renders
   Get.put(ConnectivityService());
+  Get.put(ThemeController());
   runApp(const RateFlipApp());
 }
 
@@ -27,18 +28,18 @@ class RateFlipApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final prefs = Hive.box('prefs');
-    final isDark = prefs.get('darkMode', defaultValue: false) as bool;
-    final useScheme = prefs.get('colorScheme', defaultValue: true) as bool;
-    final primary = useScheme ? AppColors.purple : AppColors.altPrimary;
-    return GetMaterialApp(
-      title: 'RateFlip',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(primary: primary),
-      darkTheme: AppTheme.dark(primary: primary),
-      themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
-      initialRoute: AppPages.initial,
-      getPages: AppPages.routes,
+    // GetBuilder rebuilds GetMaterialApp whenever ThemeController calls update()
+    // This is the only reliable way to hot-swap theme + darkTheme + themeMode together
+    return GetBuilder<ThemeController>(
+      builder: (themeCtrl) => GetMaterialApp(
+        title: 'RateLink',
+        debugShowCheckedModeBanner: false,
+        theme: themeCtrl.light,
+        darkTheme: themeCtrl.dark,
+        themeMode: themeCtrl.mode,
+        initialRoute: AppPages.initial,
+        getPages: AppPages.routes,
+      ),
     );
   }
 }
