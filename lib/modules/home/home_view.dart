@@ -99,20 +99,25 @@ class HomeView extends GetView<HomeController> {
       final offline = !Get.find<ConnectivityService>().isOnline.value;
       return AnimatedContainer(
         duration: const Duration(milliseconds: 300),
-        height: offline ? 36 : 0,
-        color: const Color(0xFFF59E0B),
+        height: offline ? 30 : 0,
+        // Muted dark tone
+        color: const Color(0xFF374151),
         child: offline
-            ? const Row(
+            ? Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.wifi_off_rounded, size: 14, color: Colors.white),
-                  SizedBox(width: 6),
+                  Icon(
+                    Icons.cloud_off_rounded,
+                    size: 12,
+                    color: Colors.white.withOpacity(0.5),
+                  ),
+                  const SizedBox(width: 6),
                   Text(
-                    'No internet connection',
+                    'Offline · Exchange rates may be outdated',
                     style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
+                      color: Colors.white.withOpacity(0.5),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ],
