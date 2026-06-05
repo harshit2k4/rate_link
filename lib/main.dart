@@ -17,7 +17,6 @@ void main() async {
   FormatPrefs.apply(
     prefs.get('digitSeparator', defaultValue: FormatPrefs.options[1]) as String,
   );
-  // Both services must exist before the first frame renders
   Get.put(ConnectivityService());
   Get.put(ThemeController());
   runApp(const RateFlipApp());
@@ -28,8 +27,9 @@ class RateFlipApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // GetBuilder rebuilds GetMaterialApp whenever ThemeController calls update()
-    // This is the only reliable way to hot-swap theme + darkTheme + themeMode together
+    final prefs = Hive.box('prefs');
+    final onboardingDone =
+        prefs.get('onboardingDone', defaultValue: false) as bool;
     return GetBuilder<ThemeController>(
       builder: (themeCtrl) => GetMaterialApp(
         title: 'RateLink',
@@ -37,7 +37,7 @@ class RateFlipApp extends StatelessWidget {
         theme: themeCtrl.light,
         darkTheme: themeCtrl.dark,
         themeMode: themeCtrl.mode,
-        initialRoute: AppPages.initial,
+        initialRoute: onboardingDone ? AppPages.initial : Routes.onboarding,
         getPages: AppPages.routes,
       ),
     );
