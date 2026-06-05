@@ -16,7 +16,6 @@ import 'home_controller.dart';
 class HomeView extends GetView<HomeController> {
   const HomeView({super.key});
 
-  // Static key so the RepaintBoundary survives rebuilds
   static final _heroKey = GlobalKey();
 
   @override
@@ -24,7 +23,6 @@ class HomeView extends GetView<HomeController> {
     return Scaffold(
       body: SafeArea(
         child: Obx(() {
-          // Full-screen states only when there is no cached data yet
           if (controller.isLoading.value &&
               controller.otherCurrencies.isEmpty) {
             return Center(
@@ -55,6 +53,11 @@ class HomeView extends GetView<HomeController> {
               ),
             );
           }
+
+          final searching = controller.searchQuery.value.isNotEmpty;
+          final pinned = controller.pinnedCurrencies;
+          final unpinned = controller.unpinnedCurrencies;
+
           return Column(
             children: [
               _buildOfflineBanner(),
@@ -62,25 +65,56 @@ class HomeView extends GetView<HomeController> {
                 child: RefreshIndicator(
                   onRefresh: controller.loadData,
                   color: context.primaryAccent,
-                  // AlwaysScrollable so pull-to-refresh works even when
-                  // content is shorter than the screen
                   child: CustomScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     slivers: [
                       SliverToBoxAdapter(child: _buildAppBar(context)),
                       SliverToBoxAdapter(child: _buildHeroCard(context)),
+                      SliverToBoxAdapter(child: _buildSearchBar(context)),
+
+                      // Pinned section — hidden while searching
+                      if (!searching && pinned.isNotEmpty) ...[
+                        SliverToBoxAdapter(
+                          child: _buildSectionHeader(context, 'Pinned'),
+                        ),
+                        SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (_, i) => _buildCurrencyRow(context, pinned[i]),
+                            childCount: pinned.length,
+                          ),
+                        ),
+                      ],
+
                       SliverToBoxAdapter(
-                        child: _buildSectionHeader(context, 'Other Currencies'),
+                        child: _buildSectionHeader(
+                          context,
+                          searching ? 'Results' : 'Other Currencies',
+                        ),
                       ),
                       SliverList(
                         delegate: SliverChildBuilderDelegate(
-                          (_, i) => _buildCurrencyRow(
-                            context,
-                            controller.otherCurrencies[i],
-                          ),
-                          childCount: controller.otherCurrencies.length,
+                          (_, i) => _buildCurrencyRow(context, unpinned[i]),
+                          childCount: unpinned.length,
                         ),
                       ),
+
+                      if (unpinned.isEmpty && searching)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.all(32),
+                            child: Center(
+                              child: Text(
+                                'No currencies match\n"${controller.searchQuery.value}"',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: context.secondaryText,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+
                       const SliverToBoxAdapter(child: SizedBox(height: 32)),
                     ],
                   ),
@@ -93,14 +127,12 @@ class HomeView extends GetView<HomeController> {
     );
   }
 
-  // Slides in from zero height when connectivity is lost
   Widget _buildOfflineBanner() {
     return Obx(() {
       final offline = !Get.find<ConnectivityService>().isOnline.value;
       return AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         height: offline ? 30 : 0,
-        // Muted dark tone
         color: const Color(0xFF374151),
         child: offline
             ? Row(
@@ -113,11 +145,10 @@ class HomeView extends GetView<HomeController> {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    'Offline · Exchange rates may be outdated',
+                    'Offline · Rates may be outdated',
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.5),
                       fontSize: 11,
-                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ],
@@ -157,13 +188,51 @@ class HomeView extends GetView<HomeController> {
               ],
             ),
           ),
-          GestureDetector(
-            onTap: () => Get.toNamed(Routes.settings),
-            child: Icon(
-              Icons.menu_rounded,
-              color: context.surfaceIconColor,
-              size: 26,
-            ),
+          Row(
+            children: [
+              // Converter shortcut
+              GestureDetector(
+                onTap: () => Get.toNamed(Routes.converter),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: context.primaryAccent.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.currency_exchange_rounded,
+                        color: context.primaryAccent,
+                        size: 15,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Convert',
+                        style: TextStyle(
+                          color: context.primaryAccent,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              GestureDetector(
+                onTap: () => Get.toNamed(Routes.settings),
+                child: Icon(
+                  Icons.menu_rounded,
+                  color: context.surfaceIconColor,
+                  size: 26,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -193,7 +262,6 @@ class HomeView extends GetView<HomeController> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Top row: pair info + share icon
                 Row(
                   children: [
                     Text(
@@ -266,11 +334,9 @@ class HomeView extends GetView<HomeController> {
     );
   }
 
-  // Date on the left, staleness indicator on the right.
-  // Amber warning icon appears when data is over 15 minutes old.
   Widget _buildStalenessRow() {
     return Obx(() {
-      controller.stalenessTick.value; // recompute every minute
+      controller.stalenessTick.value;
       final stale = controller.isStale;
       final text = controller.stalenessText;
       return Row(
@@ -340,9 +406,51 @@ class HomeView extends GetView<HomeController> {
     );
   }
 
+  // Search bar between hero card and currency list
+  Widget _buildSearchBar(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+      child: TextField(
+        onChanged: (v) => controller.searchQuery.value = v,
+        style: TextStyle(color: context.primaryText, fontSize: 15),
+        decoration: InputDecoration(
+          hintText: 'Search currencies...',
+          hintStyle: TextStyle(color: context.secondaryText, fontSize: 14),
+          prefixIcon: Icon(
+            Icons.search,
+            color: context.secondaryText,
+            size: 20,
+          ),
+          suffixIcon: Obx(
+            () => controller.searchQuery.value.isNotEmpty
+                ? GestureDetector(
+                    onTap: () => controller.searchQuery.value = '',
+                    child: Icon(
+                      Icons.close,
+                      color: context.secondaryText,
+                      size: 18,
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
+          filled: true,
+          fillColor: context.cardBg,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSectionHeader(BuildContext context, String title) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 28, 24, 4),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 4),
       child: Text(
         title,
         style: TextStyle(
@@ -361,6 +469,27 @@ class HomeView extends GetView<HomeController> {
         Routes.detail,
         arguments: {'base': controller.baseCurrency.value, 'target': item.code},
       ),
+      // Long-press to toggle favorite
+      onLongPress: () {
+        controller.toggleFavorite(item.code);
+        final pinned = controller.favorites.contains(item.code);
+        Get.snackbar(
+          '',
+          '',
+          messageText: Text(
+            pinned ? '${item.code} pinned to top' : '${item.code} unpinned',
+            style: const TextStyle(color: Colors.white, fontSize: 13),
+          ),
+          backgroundColor: const Color(0xFF1E2140),
+          duration: const Duration(seconds: 2),
+          snackPosition: SnackPosition.BOTTOM,
+          margin: const EdgeInsets.all(16),
+          borderRadius: 12,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          isDismissible: true,
+          overlayBlur: 0,
+        );
+      },
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
@@ -393,13 +522,31 @@ class HomeView extends GetView<HomeController> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(
-                  formatRate(item.rate),
-                  style: TextStyle(
-                    color: context.primaryText,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Filled star only on favorited rows — keeps rows clean
+                    Obx(
+                      () => controller.favorites.contains(item.code)
+                          ? const Padding(
+                              padding: EdgeInsets.only(right: 6),
+                              child: Icon(
+                                Icons.star_rounded,
+                                color: Colors.amber,
+                                size: 14,
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                    Text(
+                      formatRate(item.rate),
+                      style: TextStyle(
+                        color: context.primaryText,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
                 if (!isZeroChange(change))
                   Text(
@@ -440,7 +587,6 @@ class HomeView extends GetView<HomeController> {
     );
   }
 
-  // Share bottom sheet
   void _showShareSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -533,14 +679,14 @@ class HomeView extends GetView<HomeController> {
       if (byteData == null) return _shareAsText();
       final bytes = byteData.buffer.asUint8List();
       final dir = await getTemporaryDirectory();
-      final base = controller.baseCurrency.value;
-      final target = controller.targetCurrency.value;
-      final file = File('${dir.path}/rateflip_${base}_$target.png');
+      final file = File(
+        '${dir.path}/rateflip_${controller.baseCurrency.value}_${controller.targetCurrency.value}.png',
+      );
       await file.writeAsBytes(bytes);
       await Share.shareXFiles(
         [XFile(file.path)],
         text:
-            '1 $base = ${formatRate(controller.targetRate.value)} $target · RateFlip',
+            '1 ${controller.baseCurrency.value} = ${formatRate(controller.targetRate.value)} ${controller.targetCurrency.value} · RateFlip',
       );
     } catch (_) {
       await _shareAsText();

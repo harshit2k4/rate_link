@@ -34,13 +34,14 @@ class HomeController extends GetxController {
   final otherCurrencies = <OtherCurrencyItem>[].obs;
   final currencyNames = <String, String>{}.obs;
   final lastUpdated = Rxn<DateTime>();
-  // Ticks every minute so stalenessText recomputes without a separate stream
   final stalenessTick = 0.obs;
+
+  // Favorites + search
+  final favorites = <String>[].obs;
+  final searchQuery = ''.obs;
 
   String get targetCurrencyName =>
       currencyNames[targetCurrency.value] ?? targetCurrency.value;
-  String get baseCurrencyName =>
-      currencyNames[baseCurrency.value] ?? baseCurrency.value;
 
   bool get isStale {
     final dt = lastUpdated.value;
@@ -49,13 +50,49 @@ class HomeController extends GetxController {
   }
 
   String get stalenessText {
-    stalenessTick.value; // subscribe so Obx rebuilds each tick
+    stalenessTick.value;
     final dt = lastUpdated.value;
     if (dt == null) return '';
     final diff = DateTime.now().difference(dt);
     if (diff.inSeconds < 60) return 'Just updated';
     if (diff.inMinutes < 60) return 'Updated ${diff.inMinutes}m ago';
     return 'Updated ${diff.inHours}h ago';
+  }
+
+  // Currencies filtered by the search query
+  List<OtherCurrencyItem> get filteredCurrencies {
+    final q = searchQuery.value.toLowerCase();
+    if (q.isEmpty) return otherCurrencies;
+    return otherCurrencies
+        .where(
+          (item) =>
+              item.code.toLowerCase().contains(q) ||
+              item.name.toLowerCase().contains(q),
+        )
+        .toList();
+  }
+
+  // Pinned items in order they were favorited (only shown when not searching)
+  List<OtherCurrencyItem> get pinnedCurrencies =>
+      otherCurrencies.where((item) => favorites.contains(item.code)).toList();
+
+  // Unpinned items: filtered list minus any pinned ones
+  List<OtherCurrencyItem> get unpinnedCurrencies {
+    final fav = favorites.toSet();
+    return filteredCurrencies
+        .where((item) => !fav.contains(item.code))
+        .toList();
+  }
+
+  void toggleFavorite(String code) {
+    final list = List<String>.from(favorites);
+    if (list.contains(code)) {
+      list.remove(code);
+    } else {
+      list.insert(0, code);
+    }
+    favorites.value = list;
+    _prefs.put('favorites', list);
   }
 
   @override
@@ -67,6 +104,8 @@ class HomeController extends GetxController {
         _prefs.get('baseCurrency', defaultValue: 'USD') as String;
     targetCurrency.value =
         _prefs.get('targetCurrency', defaultValue: 'INR') as String;
+    final saved = _prefs.get('favorites', defaultValue: <dynamic>[]);
+    favorites.value = List<String>.from(saved as List);
     _stalenessTimer = Timer.periodic(
       const Duration(minutes: 1),
       (_) => stalenessTick.value++,
