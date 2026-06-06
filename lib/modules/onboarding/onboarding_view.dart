@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:hive/hive.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../../core/routes/app_pages.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/theme_ext.dart';
@@ -159,7 +159,7 @@ class _OnboardingViewState extends State<OnboardingView> {
           ),
           const SizedBox(height: 36),
           Text(
-            'RateFlip',
+            'RateLink',
             style: TextStyle(
               color: context.primaryText,
               fontSize: 38,
