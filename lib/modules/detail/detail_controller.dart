@@ -20,7 +20,7 @@ class DetailController extends GetxController {
 
   final isLoading = true.obs;
   final baseCurrency = 'USD'.obs;
-  final targetCurrency = 'IDR'.obs;
+  final targetCurrency = 'INR'.obs;
   final rate = 0.0.obs;
   final rateChange = 0.0.obs;
   final currentDate = ''.obs;
@@ -36,12 +36,20 @@ class DetailController extends GetxController {
     _repo = ExchangeRepository(FrankfurterProvider(), Hive.box('rateCache'));
     final args = Get.arguments as Map<String, dynamic>? ?? {};
     baseCurrency.value = args['base'] as String? ?? 'USD';
-    targetCurrency.value = args['target'] as String? ?? 'IDR';
+    targetCurrency.value = args['target'] as String? ?? 'INR';
     loadData();
   }
 
   Future<void> loadData() async {
     isLoading.value = true;
+
+    // Same currency — 1:1 trivial case, no API call needed
+    if (baseCurrency.value == targetCurrency.value) {
+      _loadTrivialData();
+      isLoading.value = false;
+      return;
+    }
+
     try {
       final today = DateTime.now();
       final start = switch (selectedPeriod.value) {
@@ -84,10 +92,26 @@ class DetailController extends GetxController {
       }
       history.value = entries;
     } catch (_) {
-      // keep existing data on error
+      // Keep existing data on network error
     } finally {
       isLoading.value = false;
     }
+  }
+
+  // Fills state with 1.0 values when base == target
+  void _loadTrivialData() {
+    rate.value = 1.0;
+    rateChange.value = 0.0;
+    currentDate.value = _fmt(DateTime.now());
+    chartSpots.value = List.generate(30, (i) => FlSpot(i.toDouble(), 1.0));
+    history.value = List.generate(
+      10,
+      (i) => HistoryEntry(
+        isoDate: _fmt(DateTime.now().subtract(Duration(days: i + 1))),
+        rate: 1.0,
+        change: 0.0,
+      ),
+    );
   }
 
   void selectPeriod(int index) {
