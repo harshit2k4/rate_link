@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../modules/converter/converter_controller.dart';
 import '../../modules/converter/converter_view.dart';
@@ -31,6 +32,10 @@ abstract class AppPages {
       name: Routes.detail,
       page: () => const DetailView(),
       binding: BindingsBuilder(() => Get.lazyPut(() => DetailController())),
+      // Slides up from below — feels like the card expanding into detail
+      transition: Transition.downToUp,
+      transitionDuration: const Duration(milliseconds: 380),
+      curve: Curves.easeOutCubic,
     ),
     GetPage(
       name: Routes.settings,
