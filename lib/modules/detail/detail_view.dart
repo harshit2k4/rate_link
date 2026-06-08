@@ -28,6 +28,7 @@ class DetailView extends GetView<DetailController> {
                   ),
                 )
               : CustomScrollView(
+                  physics: const ClampingScrollPhysics(),
                   slivers: [
                     SliverToBoxAdapter(child: _buildTopCard(context)),
                     SliverToBoxAdapter(child: _buildHistoryHeader(context)),
@@ -46,17 +47,35 @@ class DetailView extends GetView<DetailController> {
     );
   }
 
+  // All spacing and chart height derived from screen height so it
+  // fits on any phone without overflow
   Widget _buildTopCard(BuildContext context) {
+    final screenH = MediaQuery.of(context).size.height;
+    final isCompact = screenH < 680;
+
+    // Chart height: 20% of screen, clamped between 80 and 160
+    final chartH = (screenH * 0.20).clamp(80.0, 160.0);
+
+    // Vertical gaps shrink on compact screens
+    final gapAfterBack = isCompact ? 14.0 : 24.0;
+    final gapBeforeTabs = isCompact ? 12.0 : 20.0;
+    final gapBeforeChart = isCompact ? 10.0 : 16.0;
+    final cardPad = isCompact ? 18.0 : 24.0;
+    final topMargin = isCompact ? 12.0 : 20.0;
+    final rateFS = isCompact ? 30.0 : 38.0;
+
     return RepaintBoundary(
       key: _cardKey,
       child: Container(
-        margin: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+        margin: EdgeInsets.fromLTRB(24, topMargin, 24, 0),
         decoration: BoxDecoration(
           color: AppColors.darkCard,
           borderRadius: BorderRadius.circular(24),
         ),
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+        padding: EdgeInsets.all(cardPad),
         child: Column(
+          // min so the card never forces more height than its content needs
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Back + share row
@@ -81,7 +100,9 @@ class DetailView extends GetView<DetailController> {
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: gapAfterBack),
+
+            // Pair label
             Row(
               children: [
                 Text(
@@ -102,15 +123,19 @@ class DetailView extends GetView<DetailController> {
               ],
             ),
             const SizedBox(height: 6),
+
+            // Rate
             Text(
               formatRate(controller.rate.value),
-              style: const TextStyle(
+              style: TextStyle(
                 color: Colors.white,
-                fontSize: 38,
+                fontSize: rateFS,
                 fontWeight: FontWeight.bold,
                 letterSpacing: -1.5,
               ),
             ),
+
+            // Change (hidden when zero)
             if (!isZeroChange(controller.rateChange.value))
               Padding(
                 padding: const EdgeInsets.only(top: 2),
@@ -125,12 +150,16 @@ class DetailView extends GetView<DetailController> {
                   ),
                 ),
               ),
-            const SizedBox(height: 20),
+
+            SizedBox(height: gapBeforeTabs),
             _buildPeriodTabs(),
-            const SizedBox(height: 16),
+            SizedBox(height: gapBeforeChart),
+
+            // Chart only when there are enough points
             if (controller.chartSpots.length > 1)
-              SizedBox(height: 160, child: _buildDetailChart()),
-            const SizedBox(height: 14),
+              SizedBox(height: chartH, child: _buildDetailChart(chartH)),
+
+            const SizedBox(height: 12),
             Text(
               formatDisplayDate(controller.currentDate.value),
               style: const TextStyle(color: Colors.white38, fontSize: 12),
@@ -163,14 +192,19 @@ class DetailView extends GetView<DetailController> {
     );
   }
 
-  Widget _buildDetailChart() {
+  Widget _buildDetailChart(double chartH) {
     final spots = controller.chartSpots;
     final values = spots.map((s) => s.y).toList();
     final minVal = values.reduce((a, b) => a < b ? a : b);
     final maxVal = values.reduce((a, b) => a > b ? a : b);
     final range = maxVal - minVal;
-    final pad = range == 0 ? 10.0 : range * 0.15;
-    final interval = range == 0 ? 10.0 : range / 3;
+    final pad = range == 0 ? 1.0 : range * 0.15;
+    final interval = range == 0 ? 1.0 : range / 3;
+
+    // On compact screens use fewer Y-axis labels
+    final reservedSize = chartH < 100 ? 44.0 : 56.0;
+    final axisFS = chartH < 100 ? 9.0 : 10.0;
+
     return LineChart(
       LineChartData(
         minY: minVal - pad,
@@ -195,13 +229,13 @@ class DetailView extends GetView<DetailController> {
           leftTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
-              reservedSize: 56,
+              reservedSize: reservedSize,
               interval: interval,
               getTitlesWidget: (value, _) => Padding(
-                padding: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.only(right: 6),
                 child: Text(
                   _axisLabel(value),
-                  style: const TextStyle(color: Colors.white38, fontSize: 10),
+                  style: TextStyle(color: Colors.white38, fontSize: axisFS),
                   textAlign: TextAlign.right,
                 ),
               ),
@@ -232,12 +266,12 @@ class DetailView extends GetView<DetailController> {
     if (value.abs() >= 1000) {
       return '${(value / 1000).toStringAsFixed(1)}K';
     }
-    return value.toStringAsFixed(2);
+    return value.toStringAsFixed(value.abs() < 10 ? 3 : 2);
   }
 
   Widget _buildHistoryHeader(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 28, 24, 4),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 4),
       child: Text(
         'History',
         style: TextStyle(
@@ -368,13 +402,13 @@ class DetailView extends GetView<DetailController> {
   Future<void> _shareAsText() async {
     final base = controller.baseCurrency.value;
     final target = controller.targetCurrency.value;
-    final rate = formatRate(controller.rate.value);
+    final rateStr = formatRate(controller.rate.value);
     final change = controller.rateChange.value;
     final changePart = isZeroChange(change)
         ? ''
         : '\nChange today: ${formatChange(change)}';
     await Share.share(
-      '1 $base = $rate $target$changePart\n\nShared via RateFlip',
+      '1 $base = $rateStr $target$changePart\n\nShared via RateFlip',
     );
   }
 
@@ -386,16 +420,15 @@ class DetailView extends GetView<DetailController> {
       final image = await boundary.toImage(pixelRatio: 3.0);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) return _shareAsText();
-      final bytes = byteData.buffer.asUint8List();
       final dir = await getTemporaryDirectory();
-      final base = controller.baseCurrency.value;
-      final target = controller.targetCurrency.value;
-      final file = File('${dir.path}/rateflip_detail_${base}_$target.png');
-      await file.writeAsBytes(bytes);
+      final file = File(
+        '${dir.path}/rateflip_${controller.baseCurrency.value}_${controller.targetCurrency.value}.png',
+      );
+      await file.writeAsBytes(byteData.buffer.asUint8List());
       await Share.shareXFiles(
         [XFile(file.path)],
         text:
-            '1 $base = ${formatRate(controller.rate.value)} $target · RateFlip',
+            '1 ${controller.baseCurrency.value} = ${formatRate(controller.rate.value)} ${controller.targetCurrency.value} · RateFlip',
       );
     } catch (_) {
       await _shareAsText();
