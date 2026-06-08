@@ -35,8 +35,6 @@ class HomeController extends GetxController {
   final currencyNames = <String, String>{}.obs;
   final lastUpdated = Rxn<DateTime>();
   final stalenessTick = 0.obs;
-
-  // Favorites + search
   final favorites = <String>[].obs;
   final searchQuery = ''.obs;
 
@@ -59,7 +57,6 @@ class HomeController extends GetxController {
     return 'Updated ${diff.inHours}h ago';
   }
 
-  // Currencies filtered by the search query
   List<OtherCurrencyItem> get filteredCurrencies {
     final q = searchQuery.value.toLowerCase();
     if (q.isEmpty) return otherCurrencies;
@@ -72,11 +69,9 @@ class HomeController extends GetxController {
         .toList();
   }
 
-  // Pinned items in order they were favorited (only shown when not searching)
   List<OtherCurrencyItem> get pinnedCurrencies =>
       otherCurrencies.where((item) => favorites.contains(item.code)).toList();
 
-  // Unpinned items: filtered list minus any pinned ones
   List<OtherCurrencyItem> get unpinnedCurrencies {
     final fav = favorites.toSet();
     return filteredCurrencies
@@ -133,8 +128,28 @@ class HomeController extends GetxController {
       final ratesFuture = _repo.getLatestRates(base);
       final names = await namesFuture;
       final todayRates = await ratesFuture;
-
       currencyNames.value = names;
+
+      // Same currency: no API for range, use trivial data
+      if (base == target) {
+        targetRate.value = 1.0;
+        targetChange.value = 0.0;
+        currentDate.value = _fmt(today);
+        lastUpdated.value = DateTime.now();
+        chartSpots.value = List.generate(30, (i) => FlSpot(i.toDouble(), 1.0));
+        final codes = todayRates.keys.toList()..sort();
+        otherCurrencies.value = codes
+            .map(
+              (code) => OtherCurrencyItem(
+                code: code,
+                name: names[code] ?? code,
+                rate: todayRates[code]!,
+                change: 0.0,
+              ),
+            )
+            .toList();
+        return;
+      }
 
       Map<String, double> yesterdayRates;
       try {
