@@ -1,5 +1,5 @@
 import 'package:get/get.dart';
-import 'package:hive/hive.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../../core/theme/theme_controller.dart';
 import '../../core/utils/format_utils.dart';
 import '../../data/providers/frankfurter_provider.dart';
@@ -31,7 +31,6 @@ class SettingsController extends GetxController {
     targetCurrency.value =
         _prefs.get('targetCurrency', defaultValue: 'INR') as String;
     listFilter.value = _prefs.get('listFilter', defaultValue: 'All') as String;
-    // Mirror the saved state so the toggle UI shows the right position
     isDarkMode.value = _prefs.get('darkMode', defaultValue: false) as bool;
     colorScheme.value = _prefs.get('colorScheme', defaultValue: true) as bool;
     digitSeparator.value =
@@ -48,14 +47,32 @@ class SettingsController extends GetxController {
   }
 
   void setBase(String code) {
-    baseCurrency.value = code;
-    _prefs.put('baseCurrency', code);
+    if (code == targetCurrency.value) {
+      // Swap: new base becomes base, old base becomes target
+      final oldBase = baseCurrency.value;
+      baseCurrency.value = code;
+      targetCurrency.value = oldBase;
+      _prefs.put('baseCurrency', code);
+      _prefs.put('targetCurrency', oldBase);
+    } else {
+      baseCurrency.value = code;
+      _prefs.put('baseCurrency', code);
+    }
     _syncHome();
   }
 
   void setTarget(String code) {
-    targetCurrency.value = code;
-    _prefs.put('targetCurrency', code);
+    if (code == baseCurrency.value) {
+      // Swap: new target becomes target, old target becomes base
+      final oldTarget = targetCurrency.value;
+      targetCurrency.value = code;
+      baseCurrency.value = oldTarget;
+      _prefs.put('targetCurrency', code);
+      _prefs.put('baseCurrency', oldTarget);
+    } else {
+      targetCurrency.value = code;
+      _prefs.put('targetCurrency', code);
+    }
     _syncHome();
   }
 
@@ -74,7 +91,6 @@ class SettingsController extends GetxController {
   void toggleDarkMode(bool value) {
     isDarkMode.value = value;
     _prefs.put('darkMode', value);
-    // ThemeController.update() triggers GetBuilder in main.dart → full rebuild
     Get.find<ThemeController>().setDarkMode(value);
   }
 
