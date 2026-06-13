@@ -1,6 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:get/get.dart';
-import 'package:hive/hive.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../../data/providers/frankfurter_provider.dart';
 import '../../data/repositories/exchange_repository.dart';
 
@@ -28,6 +28,10 @@ class DetailController extends GetxController {
   final history = <HistoryEntry>[].obs;
   final selectedPeriod = 1.obs;
 
+  // Historical date picker
+  final historicalDate = Rxn<DateTime>();
+  bool get isHistoricalMode => historicalDate.value != null;
+
   final periods = ['Annually', 'Monthly', 'Weekly', 'Daily'];
 
   @override
@@ -40,28 +44,29 @@ class DetailController extends GetxController {
     loadData();
   }
 
-  Future<void> loadData() async {
+  // overrideEnd allows historical mode to pass a past date as the end
+  Future<void> loadData({DateTime? overrideEnd}) async {
     isLoading.value = true;
+    final endDate = overrideEnd ?? historicalDate.value ?? DateTime.now();
 
-    // Same currency — 1:1 trivial case, no API call needed
     if (baseCurrency.value == targetCurrency.value) {
-      _loadTrivialData();
+      _loadTrivialData(endDate);
       isLoading.value = false;
       return;
     }
 
     try {
-      final today = DateTime.now();
-      final start = switch (selectedPeriod.value) {
-        0 => today.subtract(const Duration(days: 365)),
-        2 => today.subtract(const Duration(days: 7)),
-        3 => today.subtract(const Duration(days: 1)),
-        _ => today.subtract(const Duration(days: 30)),
+      final periodDays = switch (selectedPeriod.value) {
+        0 => 365,
+        2 => 7,
+        3 => 1,
+        _ => 30,
       };
+      final startDate = endDate.subtract(Duration(days: periodDays));
 
       final rangeData = await _repo.getRateRange(
-        fromDate: _fmt(start),
-        toDate: _fmt(today),
+        fromDate: _fmt(startDate),
+        toDate: _fmt(endDate),
         base: baseCurrency.value,
         target: targetCurrency.value,
       );
@@ -77,46 +82,58 @@ class DetailController extends GetxController {
           : 0.0;
       currentDate.value = dates.last;
 
-      final spots = <FlSpot>[];
-      for (int i = 0; i < rates.length; i++) {
-        spots.add(FlSpot(i.toDouble(), rates[i]));
-      }
-      chartSpots.value = spots;
+      int i = 0;
+      chartSpots.value = rangeData.values
+          .map((r) => FlSpot((i++).toDouble(), r))
+          .toList();
 
       final entries = <HistoryEntry>[];
-      for (int i = dates.length - 1; i >= 0 && entries.length < 12; i--) {
-        final change = i > 0 ? rates[i] - rates[i - 1] : 0.0;
+      for (int j = dates.length - 1; j >= 0 && entries.length < 12; j--) {
         entries.add(
-          HistoryEntry(isoDate: dates[i], rate: rates[i], change: change),
+          HistoryEntry(
+            isoDate: dates[j],
+            rate: rates[j],
+            change: j > 0 ? rates[j] - rates[j - 1] : 0.0,
+          ),
         );
       }
       history.value = entries;
     } catch (_) {
-      // Keep existing data on network error
+      // Keep existing data on error
     } finally {
       isLoading.value = false;
     }
   }
 
-  // Fills state with 1.0 values when base == target
-  void _loadTrivialData() {
-    rate.value = 1.0;
-    rateChange.value = 0.0;
-    currentDate.value = _fmt(DateTime.now());
-    chartSpots.value = List.generate(30, (i) => FlSpot(i.toDouble(), 1.0));
-    history.value = List.generate(
-      10,
-      (i) => HistoryEntry(
-        isoDate: _fmt(DateTime.now().subtract(Duration(days: i + 1))),
-        rate: 1.0,
-        change: 0.0,
-      ),
-    );
+  void pickHistoricalDate(DateTime date) {
+    historicalDate.value = date;
+    loadData(overrideEnd: date);
+  }
+
+  void clearHistoricalMode() {
+    historicalDate.value = null;
+    loadData();
   }
 
   void selectPeriod(int index) {
     selectedPeriod.value = index;
-    loadData();
+    // Respect historical mode when re-loading for period change
+    loadData(overrideEnd: historicalDate.value);
+  }
+
+  void _loadTrivialData(DateTime end) {
+    rate.value = 1.0;
+    rateChange.value = 0.0;
+    currentDate.value = _fmt(end);
+    chartSpots.value = List.generate(30, (i) => FlSpot(i.toDouble(), 1.0));
+    history.value = List.generate(
+      10,
+      (i) => HistoryEntry(
+        isoDate: _fmt(end.subtract(Duration(days: i + 1))),
+        rate: 1.0,
+        change: 0.0,
+      ),
+    );
   }
 
   String _fmt(DateTime dt) =>
