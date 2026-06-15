@@ -47,22 +47,16 @@ class DetailView extends GetView<DetailController> {
     );
   }
 
-  // All spacing and chart height derived from screen height so it
-  // fits on any phone without overflow
   Widget _buildTopCard(BuildContext context) {
     final screenH = MediaQuery.of(context).size.height;
     final isCompact = screenH < 680;
-
-    // Chart height: 20% of screen, clamped between 80 and 160
     final chartH = (screenH * 0.20).clamp(80.0, 160.0);
-
-    // Vertical gaps shrink on compact screens
-    final gapAfterBack = isCompact ? 14.0 : 24.0;
-    final gapBeforeTabs = isCompact ? 12.0 : 20.0;
-    final gapBeforeChart = isCompact ? 10.0 : 16.0;
-    final cardPad = isCompact ? 18.0 : 24.0;
+    final gapAfterBack = isCompact ? 12.0 : 20.0;
+    final gapBeforeTabs = isCompact ? 10.0 : 18.0;
+    final gapBeforeChart = isCompact ? 8.0 : 14.0;
+    final cardPad = isCompact ? 16.0 : 24.0;
     final topMargin = isCompact ? 12.0 : 20.0;
-    final rateFS = isCompact ? 30.0 : 38.0;
+    final rateFS = isCompact ? 28.0 : 38.0;
 
     return RepaintBoundary(
       key: _cardKey,
@@ -74,11 +68,10 @@ class DetailView extends GetView<DetailController> {
         ),
         padding: EdgeInsets.all(cardPad),
         child: Column(
-          // min so the card never forces more height than its content needs
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Back + share row
+            // ← back   🗓 calendar   share →
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -90,16 +83,85 @@ class DetailView extends GetView<DetailController> {
                     size: 22,
                   ),
                 ),
-                GestureDetector(
-                  onTap: () => _showShareSheet(context),
-                  child: const Icon(
-                    Icons.ios_share_rounded,
-                    color: Colors.white38,
-                    size: 18,
-                  ),
+                Row(
+                  children: [
+                    // Calendar icon — opens date picker
+                    GestureDetector(
+                      onTap: () => _pickDate(context),
+                      child: Obx(
+                        () => Icon(
+                          Icons.calendar_month_rounded,
+                          color: controller.isHistoricalMode
+                              ? Colors.amber
+                              : Colors.white38,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    GestureDetector(
+                      onTap: () => _showShareSheet(context),
+                      child: const Icon(
+                        Icons.ios_share_rounded,
+                        color: Colors.white38,
+                        size: 18,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
+
+            // Historical mode banner
+            Obx(() {
+              if (!controller.isHistoricalMode) {
+                return const SizedBox.shrink();
+              }
+              return Container(
+                margin: EdgeInsets.only(top: gapAfterBack * 0.6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.amber.withOpacity(0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.history_rounded,
+                      color: Colors.amber,
+                      size: 13,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      'Historical: ${formatDisplayDate(controller.currentDate.value)}',
+                      style: const TextStyle(
+                        color: Colors.amber,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: controller.clearHistoricalMode,
+                      child: const Icon(
+                        Icons.close,
+                        color: Colors.amber,
+                        size: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+
             SizedBox(height: gapAfterBack),
 
             // Pair label
@@ -124,7 +186,6 @@ class DetailView extends GetView<DetailController> {
             ),
             const SizedBox(height: 6),
 
-            // Rate
             Text(
               formatRate(controller.rate.value),
               style: TextStyle(
@@ -135,7 +196,6 @@ class DetailView extends GetView<DetailController> {
               ),
             ),
 
-            // Change (hidden when zero)
             if (!isZeroChange(controller.rateChange.value))
               Padding(
                 padding: const EdgeInsets.only(top: 2),
@@ -155,9 +215,8 @@ class DetailView extends GetView<DetailController> {
             _buildPeriodTabs(),
             SizedBox(height: gapBeforeChart),
 
-            // Chart only when there are enough points
             if (controller.chartSpots.length > 1)
-              SizedBox(height: chartH, child: _buildDetailChart(chartH)),
+              SizedBox(height: chartH, child: _buildDetailChart()),
 
             const SizedBox(height: 12),
             Text(
@@ -168,6 +227,36 @@ class DetailView extends GetView<DetailController> {
         ),
       ),
     );
+  }
+
+  // Shows a material date picker; max date is today
+  Future<void> _pickDate(BuildContext context) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate:
+          controller.historicalDate.value ??
+          now.subtract(const Duration(days: 30)),
+      firstDate: DateTime(1999),
+      lastDate: now,
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: Theme.of(
+            ctx,
+          ).colorScheme.copyWith(primary: context.primaryAccent),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked == null) return;
+    if (picked.year == now.year &&
+        picked.month == now.month &&
+        picked.day == now.day) {
+      // Today selected — clear historical mode
+      controller.clearHistoricalMode();
+    } else {
+      controller.pickHistoricalDate(picked);
+    }
   }
 
   Widget _buildPeriodTabs() {
@@ -192,7 +281,7 @@ class DetailView extends GetView<DetailController> {
     );
   }
 
-  Widget _buildDetailChart(double chartH) {
+  Widget _buildDetailChart() {
     final spots = controller.chartSpots;
     final values = spots.map((s) => s.y).toList();
     final minVal = values.reduce((a, b) => a < b ? a : b);
@@ -200,10 +289,6 @@ class DetailView extends GetView<DetailController> {
     final range = maxVal - minVal;
     final pad = range == 0 ? 1.0 : range * 0.15;
     final interval = range == 0 ? 1.0 : range / 3;
-
-    // On compact screens use fewer Y-axis labels
-    final reservedSize = chartH < 100 ? 44.0 : 56.0;
-    final axisFS = chartH < 100 ? 9.0 : 10.0;
 
     return LineChart(
       LineChartData(
@@ -229,13 +314,13 @@ class DetailView extends GetView<DetailController> {
           leftTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
-              reservedSize: reservedSize,
+              reservedSize: 52,
               interval: interval,
               getTitlesWidget: (value, _) => Padding(
                 padding: const EdgeInsets.only(right: 6),
                 child: Text(
                   _axisLabel(value),
-                  style: TextStyle(color: Colors.white38, fontSize: axisFS),
+                  style: const TextStyle(color: Colors.white38, fontSize: 10),
                   textAlign: TextAlign.right,
                 ),
               ),
@@ -262,23 +347,32 @@ class DetailView extends GetView<DetailController> {
     );
   }
 
-  String _axisLabel(double value) {
-    if (value.abs() >= 1000) {
-      return '${(value / 1000).toStringAsFixed(1)}K';
-    }
-    return value.toStringAsFixed(value.abs() < 10 ? 3 : 2);
+  String _axisLabel(double v) {
+    if (v.abs() >= 1000) return '${(v / 1000).toStringAsFixed(1)}K';
+    return v.toStringAsFixed(v.abs() < 10 ? 3 : 2);
   }
 
   Widget _buildHistoryHeader(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 4),
-      child: Text(
-        'History',
-        style: TextStyle(
-          color: context.primaryText,
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-        ),
+      child: Row(
+        children: [
+          Text(
+            'History',
+            style: TextStyle(
+              color: context.primaryText,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          if (controller.isHistoricalMode) ...[
+            const SizedBox(width: 8),
+            Text(
+              '· around this date',
+              style: TextStyle(color: context.secondaryText, fontSize: 13),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -369,10 +463,6 @@ class DetailView extends GetView<DetailController> {
               'Share as Text',
               style: TextStyle(color: sheetCtx.primaryText),
             ),
-            subtitle: Text(
-              'Plain-text format',
-              style: TextStyle(color: sheetCtx.secondaryText, fontSize: 12),
-            ),
             onTap: () {
               Navigator.pop(sheetCtx);
               _shareAsText();
@@ -383,10 +473,6 @@ class DetailView extends GetView<DetailController> {
             title: Text(
               'Share as Image',
               style: TextStyle(color: sheetCtx.primaryText),
-            ),
-            subtitle: Text(
-              'Capture the rate card',
-              style: TextStyle(color: sheetCtx.secondaryText, fontSize: 12),
             ),
             onTap: () {
               Navigator.pop(sheetCtx);
@@ -406,9 +492,12 @@ class DetailView extends GetView<DetailController> {
     final change = controller.rateChange.value;
     final changePart = isZeroChange(change)
         ? ''
-        : '\nChange today: ${formatChange(change)}';
+        : '\nChange: ${formatChange(change)}';
+    final historicalNote = controller.isHistoricalMode
+        ? '\nRate on ${formatDisplayDate(controller.currentDate.value)}'
+        : '';
     await Share.share(
-      '1 $base = $rateStr $target$changePart\n\nShared via RateFlip',
+      '1 $base = $rateStr $target$changePart$historicalNote\n\nShared via RateFlip',
     );
   }
 
