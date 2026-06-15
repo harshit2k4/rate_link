@@ -223,6 +223,16 @@ class HomeView extends GetView<HomeController> {
                   ),
                 ),
               ),
+              const SizedBox(width: 12),
+              // Alerts bell
+              GestureDetector(
+                onTap: () => Get.toNamed(Routes.alerts),
+                child: Icon(
+                  Icons.notifications_none_rounded,
+                  color: context.surfaceIconColor,
+                  size: 24,
+                ),
+              ),
               const SizedBox(width: 14),
               GestureDetector(
                 onTap: () => Get.toNamed(Routes.settings),
