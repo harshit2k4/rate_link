@@ -1,5 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/animation.dart';
 import 'package:get/get.dart';
+import '../../modules/alerts/alerts_controller.dart';
+import '../../modules/alerts/alerts_view.dart';
 import '../../modules/converter/converter_controller.dart';
 import '../../modules/converter/converter_view.dart';
 import '../../modules/detail/detail_controller.dart';
@@ -16,6 +18,7 @@ abstract class Routes {
   static const settings = '/settings';
   static const converter = '/converter';
   static const onboarding = '/onboarding';
+  static const alerts = '/alerts';
 }
 
 abstract class AppPages {
@@ -32,7 +35,6 @@ abstract class AppPages {
       name: Routes.detail,
       page: () => const DetailView(),
       binding: BindingsBuilder(() => Get.lazyPut(() => DetailController())),
-      // Slides up from below — feels like the card expanding into detail
       transition: Transition.downToUp,
       transitionDuration: const Duration(milliseconds: 380),
       curve: Curves.easeOutCubic,
@@ -46,6 +48,11 @@ abstract class AppPages {
       name: Routes.converter,
       page: () => const ConverterView(),
       binding: BindingsBuilder(() => Get.lazyPut(() => ConverterController())),
+    ),
+    GetPage(
+      name: Routes.alerts,
+      page: () => const AlertsView(),
+      binding: BindingsBuilder(() => Get.lazyPut(() => AlertsController())),
     ),
   ];
 }
